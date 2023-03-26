@@ -1,3 +1,5 @@
+use std::env;
+
 use chrono::{DateTime, Local};
 use iced::{
     alignment::Vertical,
@@ -8,10 +10,20 @@ use iced::{
 use once_cell::sync::Lazy;
 
 fn main() -> iced::Result {
+    let username = env::args().nth(1).unwrap();
+    let password = env::args().next().unwrap();
+
     Client::run(iced::Settings {
         antialiasing: true,
+        flags: Flags { username, password },
         ..Default::default()
     })
+}
+
+#[derive(Default)]
+struct Flags {
+    username: String,
+    password: String,
 }
 
 #[derive(Clone)]
@@ -40,12 +52,12 @@ impl Application for Client {
     type Executor = executor::Default;
     type Message = ClientMessage;
     type Theme = Theme;
-    type Flags = ();
+    type Flags = Flags;
 
-    fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         (
             Self {
-                username: "Brynblack".into(),
+                username: flags.username,
                 ..Default::default()
             },
             Command::none(),
