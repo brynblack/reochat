@@ -3,7 +3,10 @@ name = "reochat"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
 
 [dependencies]
 chrono = "0.4.24"
