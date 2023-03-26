@@ -1,7 +1,8 @@
+use chrono::Local;
 use iced::{
     alignment::Vertical,
     executor,
-    widget::{scrollable, Column, Container, Scrollable, Text, TextInput},
+    widget::{scrollable, Column, Container, Row, Scrollable, Text, TextInput},
     Application, Command, Length, Theme,
 };
 use once_cell::sync::Lazy;
@@ -14,6 +15,7 @@ fn main() -> iced::Result {
 struct Message {
     sender: String,
     contents: String,
+    timestamp: String,
 }
 
 #[derive(Default)]
@@ -63,6 +65,7 @@ impl Application for Client {
                     let message = Message {
                         sender: self.username.clone(),
                         contents: self.compose_value.clone(),
+                        timestamp: format!("{}", Local::now().format("%H:%M:%S")),
                     };
 
                     self.messages.push(message);
@@ -83,7 +86,13 @@ impl Application for Client {
                         .into_iter()
                         .map(|msg| {
                             Column::new()
-                                .push(Text::new(msg.sender))
+                                .push(
+                                    Row::new()
+                                        .push(Text::new(msg.sender))
+                                        .push(Text::new(msg.timestamp).size(12))
+                                        .align_items(iced::Alignment::Center)
+                                        .spacing(8),
+                                )
                                 .push(Text::new(msg.contents))
                                 .into()
                         })
