@@ -8,7 +8,10 @@ use iced::{
 use once_cell::sync::Lazy;
 
 fn main() -> iced::Result {
-    Client::run(iced::Settings::default())
+    Client::run(iced::Settings {
+        antialiasing: true,
+        ..Default::default()
+    })
 }
 
 #[derive(Clone)]
