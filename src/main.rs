@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{DateTime, Local};
 use iced::{
     alignment::Vertical,
     executor,
@@ -15,7 +15,7 @@ fn main() -> iced::Result {
 struct Message {
     sender: String,
     contents: String,
-    timestamp: String,
+    timestamp: DateTime<Local>,
 }
 
 #[derive(Default)]
@@ -65,7 +65,7 @@ impl Application for Client {
                     let message = Message {
                         sender: self.username.clone(),
                         contents: self.compose_value.clone(),
-                        timestamp: format!("{}", Local::now().format("%H:%M:%S")),
+                        timestamp: Local::now(),
                     };
 
                     self.messages.push(message);
@@ -89,7 +89,13 @@ impl Application for Client {
                                 .push(
                                     Row::new()
                                         .push(Text::new(msg.sender))
-                                        .push(Text::new(msg.timestamp).size(12))
+                                        .push(
+                                            Text::new(format!(
+                                                "{}",
+                                                msg.timestamp.format("%H:%M:%S")
+                                            ))
+                                            .size(12),
+                                        )
                                         .align_items(iced::Alignment::Center)
                                         .spacing(8),
                                 )
@@ -126,5 +132,9 @@ impl Application for Client {
             .align_y(Vertical::Bottom)
             .padding(8)
             .into()
+    }
+
+    fn theme(&self) -> Self::Theme {
+        Theme::Dark
     }
 }
