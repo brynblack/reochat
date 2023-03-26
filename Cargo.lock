@@ -1716,6 +1716,7 @@ name = "reochat"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "once_cell",
 ]
 
 [[package]]
