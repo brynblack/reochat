@@ -6,7 +6,7 @@ use iced::{
     color, executor,
     theme::{self, Custom},
     widget::{scrollable, svg, Column, Container, Row, Scrollable, Text, TextInput},
-    Application, Color, Command, Length, Theme,
+    Application, Color, Command, Length, Padding, Theme,
 };
 use once_cell::sync::Lazy;
 
@@ -132,16 +132,21 @@ impl Application for Client {
                     TextInput::new("Message", &self.compose_value, ClientMessage::ComposerTyped)
                         .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
                         .on_submit(ClientMessage::MessageSubmitted)
-                        .padding(12),
+                        .padding(Padding {
+                            top: 12.0,
+                            right: 12.0,
+                            bottom: 12.0,
+                            left: 15.0,
+                        }),
                 )
                 .push(
                     Container::new(
                         svg::Svg::from_path(format!(
-                            "{}/resources/plus.svg",
+                            "{}/resources/send.svg",
                             env!("CARGO_MANIFEST_DIR"),
                         ))
-                        .width(16)
-                        .height(16)
+                        .width(20)
+                        .height(20)
                         .style(theme::Svg::custom_fn(|_theme| svg::Appearance {
                             color: Some(color!(0xffffff)),
                         })),
@@ -149,20 +154,27 @@ impl Application for Client {
                     .style(theme::Container::Custom(Box::new(
                         style::ContainerComposerAddFile,
                     )))
-                    .padding(12),
+                    .padding(Padding {
+                        top: 12.0,
+                        right: 10.0,
+                        bottom: 12.0,
+                        left: 14.0,
+                    })
+                    .center_x()
+                    .center_y(),
                 )
                 .align_items(iced::Alignment::Center)
                 .spacing(8),
         )
         .width(Length::Fill);
 
-        let content = Column::new().push(messages).push(composer).spacing(8);
+        let content = Column::new().push(messages).push(composer).spacing(16);
 
         Container::new(content)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_y(Vertical::Bottom)
-            .padding(8)
+            .padding(16)
             .into()
     }
 
