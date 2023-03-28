@@ -3,9 +3,10 @@ use std::env;
 use chrono::{DateTime, Local};
 use iced::{
     alignment::Vertical,
-    executor,
-    widget::{scrollable, Column, Container, Row, Scrollable, Text, TextInput},
-    Application, Command, Length, Theme,
+    color, executor,
+    theme::{self, Custom},
+    widget::{scrollable, svg, Column, Container, Row, Scrollable, Text, TextInput},
+    Application, Color, Command, Length, Theme,
 };
 use once_cell::sync::Lazy;
 
@@ -105,11 +106,8 @@ impl Application for Client {
                                     Row::new()
                                         .push(Text::new(msg.sender))
                                         .push(
-                                            Text::new(format!(
-                                                "{}",
-                                                msg.timestamp.format("%H:%M:%S")
-                                            ))
-                                            .size(12),
+                                            Text::new(format!("{}", msg.timestamp.format("%H:%M")))
+                                                .size(12),
                                         )
                                         .align_items(iced::Alignment::Center)
                                         .spacing(8),
@@ -129,13 +127,32 @@ impl Application for Client {
         .width(Length::Fill);
 
         let composer = Container::new(
-            TextInput::new(
-                "Send a message...",
-                &self.compose_value,
-                ClientMessage::ComposerTyped,
-            )
-            .on_submit(ClientMessage::MessageSubmitted)
-            .padding(8),
+            Row::new()
+                .push(
+                    TextInput::new("Message", &self.compose_value, ClientMessage::ComposerTyped)
+                        .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
+                        .on_submit(ClientMessage::MessageSubmitted)
+                        .padding(12),
+                )
+                .push(
+                    Container::new(
+                        svg::Svg::from_path(format!(
+                            "{}/resources/plus.svg",
+                            env!("CARGO_MANIFEST_DIR"),
+                        ))
+                        .width(16)
+                        .height(16)
+                        .style(theme::Svg::custom_fn(|_theme| svg::Appearance {
+                            color: Some(color!(0xffffff)),
+                        })),
+                    )
+                    .style(theme::Container::Custom(Box::new(
+                        style::ContainerComposerAddFile,
+                    )))
+                    .padding(12),
+                )
+                .align_items(iced::Alignment::Center)
+                .spacing(8),
         )
         .width(Length::Fill);
 
@@ -150,6 +167,67 @@ impl Application for Client {
     }
 
     fn theme(&self) -> Self::Theme {
-        Theme::Dark
+        Theme::Custom(Box::new(Custom::new(theme::Palette {
+            background: Color::BLACK,
+            text: Color::WHITE,
+            primary: color!(0x2c6bee),
+            success: Color::TRANSPARENT,
+            danger: Color::TRANSPARENT,
+        })))
+    }
+}
+
+mod style {
+    use iced::{
+        color,
+        widget::{container, text_input},
+        Background, Color, Theme,
+    };
+
+    pub(crate) struct ContainerComposerAddFile;
+
+    impl container::StyleSheet for ContainerComposerAddFile {
+        type Style = Theme;
+
+        fn appearance(&self, style: &Self::Style) -> container::Appearance {
+            container::Appearance {
+                background: style.palette().primary.into(),
+                border_radius: 24.0,
+                ..Default::default()
+            }
+        }
+    }
+
+    pub(crate) struct TextInputComposer;
+
+    impl text_input::StyleSheet for TextInputComposer {
+        type Style = Theme;
+
+        fn active(&self, _style: &Self::Style) -> text_input::Appearance {
+            text_input::Appearance {
+                background: Background::Color(color!(0x2e2e2e)),
+                border_radius: 24.0,
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+            }
+        }
+
+        fn focused(&self, _style: &Self::Style) -> text_input::Appearance {
+            text_input::Appearance {
+                ..self.active(&Theme::Dark)
+            }
+        }
+
+        fn placeholder_color(&self, _style: &Self::Style) -> iced::Color {
+            color!(0x969696)
+        }
+
+        fn value_color(&self, _style: &Self::Style) -> iced::Color {
+            color!(0xffffff)
+        }
+
+        fn selection_color(&self, _style: &Self::Style) -> iced::Color {
+            color!(0x0000ff)
+        }
     }
 }
