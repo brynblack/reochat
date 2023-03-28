@@ -118,6 +118,7 @@ impl Application for Client {
                         .collect(),
                 )
                 .spacing(8)
+                .padding(Padding::from([0, 20, 0, 0]))
                 .width(Length::Fill),
             )
             .id(SCROLLABLE_ID.clone()),
