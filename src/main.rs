@@ -5,18 +5,17 @@ use iced::{
     alignment::Vertical,
     color, executor,
     theme::{self, Custom},
-    widget::{scrollable, svg, Button, Column, Container, Row, Scrollable, Text, TextInput},
+    widget::{column, row, scrollable, svg, Button, Container, Scrollable, Text, TextInput},
     Application, Color, Command, Length, Padding, Theme,
 };
 use once_cell::sync::Lazy;
 
 fn main() -> iced::Result {
     let username = env::args().nth(1).unwrap();
-    let password = env::args().next().unwrap();
 
     Client::run(iced::Settings {
         antialiasing: true,
-        flags: Flags { username, password },
+        flags: Flags { username },
         ..Default::default()
     })
 }
@@ -24,7 +23,6 @@ fn main() -> iced::Result {
 #[derive(Default)]
 struct Flags {
     username: String,
-    password: String,
 }
 
 #[derive(Clone)]
@@ -96,24 +94,22 @@ impl Application for Client {
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
         let messages = Container::new(
             Scrollable::new(
-                Column::with_children(
+                column(
                     self.messages
                         .clone()
                         .into_iter()
                         .map(|msg| {
-                            Column::new()
-                                .push(
-                                    Row::new()
-                                        .push(Text::new(msg.sender))
-                                        .push(
-                                            Text::new(format!("{}", msg.timestamp.format("%H:%M")))
-                                                .size(12),
-                                        )
-                                        .align_items(iced::Alignment::Center)
-                                        .spacing(8),
-                                )
-                                .push(Text::new(msg.contents))
-                                .into()
+                            column![
+                                row![
+                                    Text::new(msg.sender),
+                                    Text::new(format!("{}", msg.timestamp.format("%H:%M")))
+                                        .size(12)
+                                ]
+                                .align_items(iced::Alignment::Center)
+                                .spacing(8),
+                                Text::new(msg.contents)
+                            ]
+                            .into()
                         })
                         .collect(),
                 )
@@ -128,45 +124,42 @@ impl Application for Client {
         .width(Length::Fill);
 
         let composer = Container::new(
-            Row::new()
-                .push(
-                    TextInput::new("Message", &self.compose_value, ClientMessage::ComposerTyped)
-                        .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
-                        .on_submit(ClientMessage::MessageSubmitted)
-                        .padding(Padding {
-                            top: 12.0,
-                            right: 12.0,
-                            bottom: 12.0,
-                            left: 15.0,
-                        }),
-                )
-                .push(
-                    Button::new(
-                        svg::Svg::from_path(format!(
-                            "{}/resources/send.svg",
-                            env!("CARGO_MANIFEST_DIR"),
-                        ))
-                        .width(20)
-                        .height(20)
-                        .style(theme::Svg::custom_fn(|_theme| svg::Appearance {
-                            color: Some(color!(0xffffff)),
-                        })),
-                    )
+            row![
+                TextInput::new("Message", &self.compose_value, ClientMessage::ComposerTyped)
+                    .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
+                    .on_submit(ClientMessage::MessageSubmitted)
                     .padding(Padding {
                         top: 12.0,
-                        right: 10.0,
+                        right: 12.0,
                         bottom: 12.0,
-                        left: 14.0,
-                    })
-                    .on_press(ClientMessage::MessageSubmitted)
-                    .style(theme::Button::Custom(Box::new(style::ButtonComposerSend))),
+                        left: 15.0,
+                    }),
+                Button::new(
+                    svg::Svg::from_path(format!(
+                        "{}/resources/send.svg",
+                        env!("CARGO_MANIFEST_DIR"),
+                    ))
+                    .width(20)
+                    .height(20)
+                    .style(theme::Svg::custom_fn(|_theme| svg::Appearance {
+                        color: Some(color!(0xffffff)),
+                    })),
                 )
-                .align_items(iced::Alignment::Center)
-                .spacing(8),
+                .padding(Padding {
+                    top: 12.0,
+                    right: 10.0,
+                    bottom: 12.0,
+                    left: 14.0,
+                })
+                .on_press(ClientMessage::MessageSubmitted)
+                .style(theme::Button::Custom(Box::new(style::ButtonComposerSend))),
+            ]
+            .align_items(iced::Alignment::Center)
+            .spacing(8),
         )
         .width(Length::Fill);
 
-        let content = Column::new().push(messages).push(composer).spacing(16);
+        let content = column![messages, composer].spacing(16);
 
         Container::new(content)
             .width(Length::Fill)
@@ -202,6 +195,14 @@ mod style {
         fn active(&self, style: &Self::Style) -> button::Appearance {
             button::Appearance {
                 background: style.palette().primary.into(),
+                border_radius: 24.0,
+                ..Default::default()
+            }
+        }
+
+        fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+            button::Appearance {
+                background: color!(0x004fee).into(),
                 border_radius: 24.0,
                 ..Default::default()
             }
