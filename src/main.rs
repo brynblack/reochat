@@ -5,7 +5,7 @@ use iced::{
     alignment::Vertical,
     color, executor,
     theme::{self, Custom},
-    widget::{scrollable, svg, Column, Container, Row, Scrollable, Text, TextInput},
+    widget::{scrollable, svg, Button, Column, Container, Row, Scrollable, Text, TextInput},
     Application, Color, Command, Length, Padding, Theme,
 };
 use once_cell::sync::Lazy;
@@ -141,7 +141,7 @@ impl Application for Client {
                         }),
                 )
                 .push(
-                    Container::new(
+                    Button::new(
                         svg::Svg::from_path(format!(
                             "{}/resources/send.svg",
                             env!("CARGO_MANIFEST_DIR"),
@@ -152,17 +152,14 @@ impl Application for Client {
                             color: Some(color!(0xffffff)),
                         })),
                     )
-                    .style(theme::Container::Custom(Box::new(
-                        style::ContainerComposerAddFile,
-                    )))
                     .padding(Padding {
                         top: 12.0,
                         right: 10.0,
                         bottom: 12.0,
                         left: 14.0,
                     })
-                    .center_x()
-                    .center_y(),
+                    .on_press(ClientMessage::MessageSubmitted)
+                    .style(theme::Button::Custom(Box::new(style::ButtonComposerSend))),
                 )
                 .align_items(iced::Alignment::Center)
                 .spacing(8),
@@ -193,17 +190,17 @@ impl Application for Client {
 mod style {
     use iced::{
         color,
-        widget::{container, text_input},
+        widget::{button, text_input},
         Background, Color, Theme,
     };
 
-    pub(crate) struct ContainerComposerAddFile;
+    pub(crate) struct ButtonComposerSend;
 
-    impl container::StyleSheet for ContainerComposerAddFile {
+    impl button::StyleSheet for ButtonComposerSend {
         type Style = Theme;
 
-        fn appearance(&self, style: &Self::Style) -> container::Appearance {
-            container::Appearance {
+        fn active(&self, style: &Self::Style) -> button::Appearance {
+            button::Appearance {
                 background: style.palette().primary.into(),
                 border_radius: 24.0,
                 ..Default::default()
