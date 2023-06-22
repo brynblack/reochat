@@ -216,7 +216,7 @@ mod style {
 
         fn active(&self, _style: &Self::Style) -> text_input::Appearance {
             text_input::Appearance {
-                background: Background::Color(color!(0x2e2e2e)),
+                background: Background::Color(color!(0x4c4c4c)),
                 border_radius: 24.0,
                 border_width: 0.0,
                 border_color: Color::TRANSPARENT,
