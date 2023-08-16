@@ -15,6 +15,8 @@ use std::{env, process};
 #[derive(Default)]
 struct Flags {
     username: String,
+    password: String,
+    homeserver_url: String,
 }
 
 #[derive(Clone)]
@@ -35,6 +37,7 @@ struct Client {
 enum ClientMessage {
     ComposerTyped(String),
     MessageSubmitted,
+    Server,
 }
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -58,11 +61,13 @@ pub async fn run() -> anyhow::Result<()> {
         }
     };
 
-    login_and_sync(homeserver_url, &username, &password).await?;
-
     Client::run(iced::Settings {
         antialiasing: true,
-        flags: Flags { username },
+        flags: Flags {
+            username,
+            password,
+            homeserver_url,
+        },
         ..Default::default()
     })
     .map_err(anyhow::Error::from)
@@ -77,10 +82,13 @@ impl Application for Client {
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         (
             Self {
-                username: flags.username,
+                username: flags.username.clone(),
                 ..Default::default()
             },
-            Command::none(),
+            Command::perform(
+                login_and_sync(flags.homeserver_url, flags.username, flags.password),
+                |_| ClientMessage::Server,
+            ),
         )
     }
 
@@ -109,6 +117,7 @@ impl Application for Client {
                     scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
                 }
             },
+            ClientMessage::Server => Command::none(),
         }
     }
 
@@ -203,8 +212,8 @@ impl Application for Client {
 
 async fn login_and_sync(
     homeserver_url: String,
-    username: &str,
-    password: &str,
+    username: String,
+    password: String,
 ) -> anyhow::Result<()> {
     let client = matrix_sdk::Client::builder()
         .homeserver_url(homeserver_url)
@@ -212,7 +221,7 @@ async fn login_and_sync(
         .await?;
 
     client
-        .login_username(username, password)
+        .login_username(&username, &password)
         .initial_device_display_name("ReoChat")
         .send()
         .await?;
