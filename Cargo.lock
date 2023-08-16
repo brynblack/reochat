@@ -3155,6 +3155,7 @@ checksum = "f1382d1f0a252c4bf97dc20d979a2fdd05b024acd7c2ed0f7595d7817666a157"
 name = "reochat"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "env_logger",
  "iced",

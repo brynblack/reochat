@@ -9,6 +9,7 @@ strip = true
 lto = true
 
 [dependencies]
+anyhow = "1.0.74"
 chrono = "0.4.24"
 env_logger = "0.10.0"
 iced = { version = "0.8.0", features = ["svg"] }

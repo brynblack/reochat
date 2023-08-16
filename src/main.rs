@@ -13,7 +13,7 @@ use matrix_sdk::config::SyncSettings;
 use once_cell::sync::Lazy;
 
 #[tokio::main]
-async fn main() -> iced::Result {
+async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let mut args = env::args();
@@ -28,7 +28,7 @@ async fn main() -> iced::Result {
         _ => {
             eprintln!(
                 "Usage: {} <homeserver_url> <username> <password>",
-                cmd.unwrap()
+                cmd.unwrap_or(env!("CARGO_PKG_NAME").to_string())
             );
             process::exit(1);
         }
@@ -41,32 +41,31 @@ async fn main() -> iced::Result {
         flags: Flags { username },
         ..Default::default()
     })
+    .map_err(anyhow::Error::from)
 }
 
-async fn login_and_sync(homeserver_url: String, username: &str, password: &str) -> iced::Result {
+async fn login_and_sync(
+    homeserver_url: String,
+    username: &str,
+    password: &str,
+) -> anyhow::Result<()> {
     let client = matrix_sdk::Client::builder()
         .homeserver_url(homeserver_url)
         .build()
-        .await
-        .unwrap();
+        .await?;
 
     client
         .login_username(username, password)
         .initial_device_display_name("ReoChat")
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     info!("logged in as {username}");
 
-    let sync_token = client
-        .sync_once(SyncSettings::default())
-        .await
-        .unwrap()
-        .next_batch;
+    let sync_token = client.sync_once(SyncSettings::default()).await?.next_batch;
 
     let settings = SyncSettings::default().token(sync_token);
-    client.sync(settings).await.unwrap();
+    client.sync(settings).await?;
 
     Ok(())
 }
