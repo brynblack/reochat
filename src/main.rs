@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, process};
 
 use chrono::{DateTime, Local};
 use iced::{
@@ -8,16 +8,67 @@ use iced::{
     widget::{column, row, scrollable, svg, Button, Container, Scrollable, Text, TextInput},
     Application, Color, Command, Length, Padding, Theme,
 };
+use log::info;
+use matrix_sdk::config::SyncSettings;
 use once_cell::sync::Lazy;
 
-fn main() -> iced::Result {
-    let username = env::args().nth(1).unwrap();
+#[tokio::main]
+async fn main() -> iced::Result {
+    env_logger::init();
+
+    let mut args = env::args();
+
+    let cmd = args.next();
+    let homeserver_url = args.next();
+    let username = args.next();
+    let password = args.next();
+
+    let (homeserver_url, username, password) = match (homeserver_url, username, password) {
+        (Some(a), Some(b), Some(c)) => (a, b, c),
+        _ => {
+            eprintln!(
+                "Usage: {} <homeserver_url> <username> <password>",
+                cmd.unwrap()
+            );
+            process::exit(1);
+        }
+    };
+
+    login_and_sync(homeserver_url, &username, &password).await?;
 
     Client::run(iced::Settings {
         antialiasing: true,
         flags: Flags { username },
         ..Default::default()
     })
+}
+
+async fn login_and_sync(homeserver_url: String, username: &str, password: &str) -> iced::Result {
+    let client = matrix_sdk::Client::builder()
+        .homeserver_url(homeserver_url)
+        .build()
+        .await
+        .unwrap();
+
+    client
+        .login_username(username, password)
+        .initial_device_display_name("ReoChat")
+        .send()
+        .await
+        .unwrap();
+
+    info!("logged in as {username}");
+
+    let sync_token = client
+        .sync_once(SyncSettings::default())
+        .await
+        .unwrap()
+        .next_batch;
+
+    let settings = SyncSettings::default().token(sync_token);
+    client.sync(settings).await.unwrap();
+
+    Ok(())
 }
 
 #[derive(Default)]
