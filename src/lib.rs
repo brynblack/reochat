@@ -31,13 +31,15 @@ struct Client {
     username: String,
     compose_value: String,
     messages: Vec<Message>,
+    client: Option<matrix_sdk::Client>,
+    sync_token: String,
 }
 
 #[derive(Debug, Clone)]
 enum ClientMessage {
     ComposerTyped(String),
     MessageSubmitted,
-    Server,
+    LoggedIn(matrix_sdk::Client, String),
 }
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -86,8 +88,11 @@ impl Application for Client {
                 ..Default::default()
             },
             Command::perform(
-                login_and_sync(flags.homeserver_url, flags.username, flags.password),
-                |_| ClientMessage::Server,
+                login(flags.homeserver_url, flags.username, flags.password),
+                |res| {
+                    let (client, token) = res.unwrap();
+                    ClientMessage::LoggedIn(client, token)
+                },
             ),
         )
     }
@@ -117,7 +122,11 @@ impl Application for Client {
                     scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
                 }
             },
-            ClientMessage::Server => Command::none(),
+            ClientMessage::LoggedIn(client, sync_token) => {
+                self.client = Some(client);
+                self.sync_token = sync_token;
+                Command::none()
+            }
         }
     }
 
@@ -210,11 +219,13 @@ impl Application for Client {
     }
 }
 
-async fn login_and_sync(
+async fn login(
     homeserver_url: String,
     username: String,
     password: String,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(matrix_sdk::Client, String)> {
+    info!("connecting to homeserver {}", &homeserver_url);
+
     let client = matrix_sdk::Client::builder()
         .homeserver_url(homeserver_url)
         .build()
@@ -230,8 +241,5 @@ async fn login_and_sync(
 
     let sync_token = client.sync_once(SyncSettings::default()).await?.next_batch;
 
-    let settings = SyncSettings::default().token(sync_token);
-    client.sync(settings).await?;
-
-    Ok(())
+    Ok((client, sync_token))
 }
