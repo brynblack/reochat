@@ -9,6 +9,7 @@ use iced::{
     widget::{column, row, scrollable, svg, Button, Container, Scrollable, Text, TextInput},
     Application, Color, Command, Length, Padding, Theme,
 };
+use log::warn;
 use once_cell::sync::Lazy;
 use std::{env, process};
 
@@ -40,6 +41,7 @@ enum ClientMessage {
     ComposerTyped(String),
     MessageSubmitted,
     LoggedIn(matrix_sdk::Client, String),
+    FailedLogin,
 }
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -90,7 +92,13 @@ impl Application for Client {
             Command::perform(
                 matrix::login(flags.homeserver_url, flags.username, flags.password),
                 |res| {
-                    let (client, token) = res.unwrap();
+                    let (client, token) = match res {
+                        Ok((client, token)) => (client, token),
+                        Err(err) => {
+                            warn!("failed to login with error {}", err);
+                            return ClientMessage::FailedLogin;
+                        }
+                    };
                     ClientMessage::LoggedIn(client, token)
                 },
             ),
@@ -127,6 +135,7 @@ impl Application for Client {
                 self.sync_token = sync_token;
                 Command::none()
             }
+            ClientMessage::FailedLogin => Command::none(),
         }
     }
 
