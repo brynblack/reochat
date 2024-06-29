@@ -11,7 +11,7 @@ use iced::{
 };
 use log::warn;
 use once_cell::sync::Lazy;
-use std::{env, process};
+use std::{env, process, sync::Arc};
 
 #[derive(Default)]
 struct Flags {
@@ -139,28 +139,21 @@ impl Application for Client {
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+    fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
         let messages = Container::new(
             Scrollable::new(
-                column(
-                    self.messages
-                        .clone()
-                        .into_iter()
-                        .map(|msg| {
-                            column![
-                                row![
-                                    Text::new(msg.sender),
-                                    Text::new(format!("{}", msg.timestamp.format("%H:%M")))
-                                        .size(12)
-                                ]
-                                .align_items(iced::Alignment::Center)
-                                .spacing(8),
-                                Text::new(msg.contents)
-                            ]
-                            .into()
-                        })
-                        .collect(),
-                )
+                column(self.messages.clone().into_iter().map(|msg| {
+                    column![
+                        row![
+                            Text::new(msg.sender),
+                            Text::new(format!("{}", msg.timestamp.format("%H:%M"))).size(12)
+                        ]
+                        .align_items(iced::Alignment::Center)
+                        .spacing(8),
+                        Text::new(msg.contents)
+                    ]
+                    .into()
+                }))
                 .spacing(8)
                 .padding(Padding::from([0, 20, 0, 0]))
                 .width(Length::Fill),
@@ -173,7 +166,8 @@ impl Application for Client {
 
         let composer = Container::new(
             row![
-                TextInput::new("Message", &self.compose_value, ClientMessage::ComposerTyped)
+                TextInput::new("Message", &self.compose_value)
+                    .on_input(ClientMessage::ComposerTyped)
                     .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
                     .on_submit(ClientMessage::MessageSubmitted)
                     .padding(Padding {
@@ -218,12 +212,15 @@ impl Application for Client {
     }
 
     fn theme(&self) -> Self::Theme {
-        Theme::Custom(Box::new(Custom::new(theme::Palette {
-            background: Color::BLACK,
-            text: Color::WHITE,
-            primary: color!(0x2c6bee),
-            success: Color::TRANSPARENT,
-            danger: Color::TRANSPARENT,
-        })))
+        Theme::Custom(Arc::new(Custom::new(
+            "default".to_string(),
+            theme::Palette {
+                background: Color::BLACK,
+                text: Color::WHITE,
+                primary: color!(0x2c6bee),
+                success: Color::TRANSPARENT,
+                danger: Color::TRANSPARENT,
+            },
+        )))
     }
 }

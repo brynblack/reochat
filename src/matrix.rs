@@ -14,8 +14,9 @@ pub async fn login(
         .await?;
 
     client
+        .matrix_auth()
         .login_username(&username, &password)
-        .initial_device_display_name("ReoChat")
+        .initial_device_display_name(env!("CARGO_PKG_NAME"))
         .send()
         .await?;
 

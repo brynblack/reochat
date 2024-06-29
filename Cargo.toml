@@ -9,11 +9,11 @@ strip = true
 lto = true
 
 [dependencies]
-anyhow = "1.0.74"
-chrono = "0.4.24"
-env_logger = "0.10.0"
-iced = { version = "0.8.0", features = ["svg", "tokio"] }
-log = "0.4.20"
-matrix-sdk = "0.6.2"
-once_cell = "1.17.1"
-tokio = { version = "1.31.0", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0.86"
+chrono = "0.4.38"
+env_logger = "0.11.3"
+iced = { version = "0.12.1", features = ["svg", "tokio"] }
+log = "0.4.22"
+matrix-sdk = "0.7.1"
+once_cell = "1.19.0"
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
