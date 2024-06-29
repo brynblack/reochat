@@ -11,16 +11,16 @@ impl button::StyleSheet for ButtonComposerSend {
 
     fn active(&self, style: &Self::Style) -> button::Appearance {
         button::Appearance {
-            background: style.palette().primary.into(),
-            border_radius: 24.0,
+            background: iced::Background::Color(style.palette().primary).into(),
+            border: iced::Border::with_radius(24.0),
             ..Default::default()
         }
     }
 
     fn hovered(&self, _style: &Self::Style) -> button::Appearance {
         button::Appearance {
-            background: color!(0x004fee).into(),
-            border_radius: 24.0,
+            background: iced::Background::Color(color!(0x004fee)).into(),
+            border: iced::Border::with_radius(24.0),
             ..Default::default()
         }
     }
@@ -34,9 +34,8 @@ impl text_input::StyleSheet for TextInputComposer {
     fn active(&self, _style: &Self::Style) -> text_input::Appearance {
         text_input::Appearance {
             background: Background::Color(color!(0x4c4c4c)),
-            border_radius: 24.0,
-            border_width: 0.0,
-            border_color: Color::TRANSPARENT,
+            border: iced::Border::with_radius(24.0),
+            icon_color: Color::TRANSPARENT,
         }
     }
 
@@ -56,5 +55,17 @@ impl text_input::StyleSheet for TextInputComposer {
 
     fn selection_color(&self, _style: &Self::Style) -> iced::Color {
         color!(0x0000ff)
+    }
+
+    fn disabled_color(&self, _style: &Self::Style) -> Color {
+        color!(0x969696)
+    }
+
+    fn disabled(&self, _style: &Self::Style) -> text_input::Appearance {
+        text_input::Appearance {
+            background: Background::Color(color!(0x4c4c4c)),
+            border: iced::Border::with_radius(24.0),
+            icon_color: Color::TRANSPARENT,
+        }
     }
 }
