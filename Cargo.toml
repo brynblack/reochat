@@ -2,6 +2,10 @@
 name = "reochat"
 version = "0.1.0"
 edition = "2021"
+authors = ["Brynley Llewellyn-Roux"]
+description = "A Matrix client written in Rust."
+repository = "https://github.com/brynblack/reochat"
+license = "MIT"
 
 [profile.release]
 codegen-units = 1
