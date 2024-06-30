@@ -1,3 +1,5 @@
+use iced::advanced::Hasher;
+use std::{hash::Hash, sync::Mutex};
 mod matrix;
 mod style;
 
@@ -10,9 +12,15 @@ use iced::{
     widget::{column, row, scrollable, svg, Button, Container, Scrollable, Text, TextInput},
     Application, Color, Command, Length, Padding, Theme,
 };
-use log::warn;
+use log::{info, warn};
 use once_cell::sync::Lazy;
-use std::{env, sync::Arc};
+use std::{
+    env,
+    sync::{
+        mpsc::{Receiver, Sender},
+        Arc,
+    },
+};
 
 #[derive(Default)]
 struct Flags {
@@ -21,7 +29,7 @@ struct Flags {
     homeserver_url: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Message {
     sender: String,
     contents: String,
@@ -35,6 +43,8 @@ struct Client {
     messages: Vec<Message>,
     client: Option<matrix_sdk::Client>,
     sync_token: String,
+    command_sender: Option<Sender<ClientMessage>>,
+    command_receiver: Option<Arc<Mutex<Receiver<ClientMessage>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +53,7 @@ enum ClientMessage {
     MessageSubmitted,
     LoggedIn(matrix_sdk::Client, String),
     FailedLogin,
+    NewMessage(Message),
 }
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -80,21 +91,33 @@ impl Application for Client {
     type Flags = Flags;
 
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        let (command_sender, command_receiver) = std::sync::mpsc::channel();
+
+        let client = Self {
+            username: flags.username.clone(),
+            command_sender: Some(command_sender.clone()),
+            command_receiver: Some(Arc::new(Mutex::new(command_receiver))),
+            ..Default::default()
+        };
+
         (
-            Self {
-                username: flags.username.clone(),
-                ..Default::default()
-            },
+            client,
             Command::perform(
-                matrix::login(flags.homeserver_url, flags.username, flags.password),
+                matrix::login(
+                    flags.homeserver_url,
+                    flags.username,
+                    flags.password,
+                    command_sender,
+                ),
                 |res| {
                     let (client, token) = match res {
                         Ok((client, token)) => (client, token),
                         Err(err) => {
-                            warn!("failed to login with error {}", err);
+                            warn!("Failed to login with error {}", err);
                             return ClientMessage::FailedLogin;
                         }
                     };
+                    info!("Logged in as {}", client.user_id().unwrap());
                     ClientMessage::LoggedIn(client, token)
                 },
             ),
@@ -102,7 +125,7 @@ impl Application for Client {
     }
 
     fn title(&self) -> String {
-        "ReoChat".into()
+        env!("CARGO_PKG_NAME").into()
     }
 
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
@@ -132,6 +155,10 @@ impl Application for Client {
                 Command::none()
             }
             ClientMessage::FailedLogin => Command::none(),
+            ClientMessage::NewMessage(message) => {
+                self.messages.push(message);
+                scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
+            }
         }
     }
 
@@ -213,10 +240,52 @@ impl Application for Client {
             theme::Palette {
                 background: Color::BLACK,
                 text: Color::WHITE,
-                primary: color!(0x2c6bee),
+                primary: color!(0xffc0cb),
                 success: Color::TRANSPARENT,
                 danger: Color::TRANSPARENT,
             },
         )))
+    }
+
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        if let Some(receiver) = &self.command_receiver {
+            iced::Subscription::from_recipe(PollMessages {
+                receiver: Arc::clone(receiver),
+            })
+        } else {
+            iced::Subscription::none()
+        }
+    }
+}
+
+struct PollMessages {
+    receiver: Arc<Mutex<Receiver<ClientMessage>>>,
+}
+
+impl iced::advanced::subscription::Recipe for PollMessages {
+    type Output = ClientMessage;
+
+    fn hash(&self, state: &mut Hasher) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
+
+    fn stream(
+        self: Box<Self>,
+        _input: iced::advanced::subscription::EventStream,
+    ) -> iced::advanced::graphics::futures::BoxStream<Self::Output> {
+        use iced::futures::StreamExt;
+
+        let receiver = self.receiver.clone();
+
+        let stream = iced::futures::stream::unfold(receiver, |receiver| async move {
+            let message = {
+                let receiver = receiver.lock().unwrap();
+                receiver.recv().ok()
+            };
+
+            message.map(|msg| (msg, receiver))
+        });
+
+        stream.boxed()
     }
 }
