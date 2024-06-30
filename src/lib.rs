@@ -2,6 +2,7 @@ mod matrix;
 mod style;
 
 use chrono::{DateTime, Local};
+use clap::Parser;
 use iced::{
     alignment::Vertical,
     color, executor,
@@ -11,7 +12,7 @@ use iced::{
 };
 use log::warn;
 use once_cell::sync::Lazy;
-use std::{env, process, sync::Arc};
+use std::{env, sync::Arc};
 
 #[derive(Default)]
 struct Flags {
@@ -46,31 +47,26 @@ enum ClientMessage {
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Account username
+    username: String,
+    /// Account password
+    password: String,
+    /// URL of the homeserver to connect to
+    homeserver_url: String,
+}
+
 pub async fn run() -> anyhow::Result<()> {
-    let mut args = env::args();
-
-    let cmd = args.next();
-    let homeserver_url = args.next();
-    let username = args.next();
-    let password = args.next();
-
-    let (homeserver_url, username, password) = match (homeserver_url, username, password) {
-        (Some(a), Some(b), Some(c)) => (a, b, c),
-        _ => {
-            eprintln!(
-                "Usage: {} <homeserver_url> <username> <password>",
-                cmd.unwrap_or(env!("CARGO_PKG_NAME").to_string())
-            );
-            process::exit(1);
-        }
-    };
+    let cli = Cli::parse();
 
     Client::run(iced::Settings {
         antialiasing: true,
         flags: Flags {
-            username,
-            password,
-            homeserver_url,
+            username: cli.username,
+            password: cli.password,
+            homeserver_url: cli.homeserver_url,
         },
         ..Default::default()
     })
