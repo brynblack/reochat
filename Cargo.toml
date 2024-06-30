@@ -7,11 +7,6 @@ description = "A Matrix client written in Rust."
 repository = "https://github.com/brynblack/reochat"
 license = "MIT"
 
-[profile.release]
-codegen-units = 1
-strip = true
-lto = true
-
 [dependencies]
 anyhow = "1.0.86"
 chrono = "0.4.38"
