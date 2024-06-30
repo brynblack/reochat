@@ -20,4 +20,4 @@ cargo install
 
 
 ## License
-The source code for this project is licensed under the MIT license. You may find the conditions of the license [here](LICENSE.md).
+The source code for this project is licensed under the MIT license. You may find the conditions of the license [here](LICENSE).
