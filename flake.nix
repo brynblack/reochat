@@ -12,12 +12,18 @@
         };
       in
       {
-        devShells.default = with pkgs; mkShell {
+        devShells.default = with pkgs; mkShell rec {
           nativeBuildInputs = [
             pkg-config
             openssl
             sqlite
           ];
+          buildInputs = [
+            libxkbcommon
+            libGL
+            wayland
+          ];
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
         };
       });
 }
