@@ -1,5 +1,7 @@
 use iced::advanced::Hasher;
-use std::{hash::Hash, sync::Mutex};
+use matrix::Credentials;
+use matrix_sdk::ruma::OwnedRoomId;
+use std::{hash::Hash, str::FromStr, sync::Mutex};
 mod matrix;
 mod style;
 
@@ -26,7 +28,7 @@ use std::{
 struct Flags {
     username: String,
     password: String,
-    homeserver_url: String,
+    roomid: String,
 }
 
 #[derive(Clone, Debug)]
@@ -45,6 +47,7 @@ struct Client {
     sync_token: String,
     command_sender: Option<Sender<ClientMessage>>,
     command_receiver: Option<Arc<Mutex<Receiver<ClientMessage>>>>,
+    roomid: String,
 }
 
 #[derive(Debug, Clone)]
@@ -61,12 +64,12 @@ static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
-    /// Account username
+    /// Account username (e.g. `@meow123:matrix.org`)
     username: String,
     /// Account password
     password: String,
-    /// URL of the homeserver to connect to
-    homeserver_url: String,
+    /// Room ID to message in (WIP)
+    roomid: String,
 }
 
 pub async fn run() -> anyhow::Result<()> {
@@ -77,11 +80,28 @@ pub async fn run() -> anyhow::Result<()> {
         flags: Flags {
             username: cli.username,
             password: cli.password,
-            homeserver_url: cli.homeserver_url,
+            roomid: cli.roomid,
         },
         ..Default::default()
     })
     .map_err(anyhow::Error::from)
+}
+
+impl Client {
+    async fn send_message(
+        client: matrix_sdk::Client,
+        roomid: String,
+        content: String,
+    ) -> Result<(), matrix_sdk::Error> {
+        let content =
+            matrix_sdk::ruma::events::room::message::RoomMessageEventContent::text_plain(content);
+        client
+            .get_room(&OwnedRoomId::from_str(&roomid).unwrap())
+            .unwrap()
+            .send(content)
+            .await?;
+        Ok(())
+    }
 }
 
 impl Application for Client {
@@ -97,30 +117,28 @@ impl Application for Client {
             username: flags.username.clone(),
             command_sender: Some(command_sender.clone()),
             command_receiver: Some(Arc::new(Mutex::new(command_receiver))),
+            roomid: flags.roomid,
             ..Default::default()
+        };
+
+        let credentials = Credentials {
+            username: flags.username,
+            password: flags.password,
         };
 
         (
             client,
-            Command::perform(
-                matrix::login(
-                    flags.homeserver_url,
-                    flags.username,
-                    flags.password,
-                    command_sender,
-                ),
-                |res| {
-                    let (client, token) = match res {
-                        Ok((client, token)) => (client, token),
-                        Err(err) => {
-                            warn!("Failed to login with error {}", err);
-                            return ClientMessage::FailedLogin;
-                        }
-                    };
-                    info!("Logged in as {}", client.user_id().unwrap());
-                    ClientMessage::LoggedIn(client, token)
-                },
-            ),
+            Command::perform(matrix::run(credentials), |res| {
+                let (client, token) = match res {
+                    Ok((client, token)) => (client, token),
+                    Err(err) => {
+                        warn!("Failed to login with error {}", err);
+                        return ClientMessage::FailedLogin;
+                    }
+                };
+                info!("Logged in as {}", client.user_id().unwrap());
+                ClientMessage::LoggedIn(client, token)
+            }),
         )
     }
 
@@ -143,16 +161,37 @@ impl Application for Client {
                         timestamp: Local::now(),
                     };
 
-                    self.messages.push(message);
+                    self.messages.push(message.clone());
                     self.compose_value.clear();
 
-                    scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
+                    if let Some(client) = &self.client {
+                        let client_clone = client.clone();
+                        let roomid = self.roomid.clone();
+                        let content = message.contents.clone();
+                        Command::perform(
+                            async move {
+                                Client::send_message(client_clone, roomid, content)
+                                    .await
+                                    .unwrap();
+                                ClientMessage::NewMessage(message)
+                            },
+                            |_| ClientMessage::FailedLogin,
+                        )
+                    } else {
+                        scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
+                    }
                 }
             },
             ClientMessage::LoggedIn(client, sync_token) => {
-                self.client = Some(client);
-                self.sync_token = sync_token;
-                Command::none()
+                self.client = Some(client.clone());
+                self.sync_token = sync_token.clone();
+                let command_sender = self.command_sender.clone().unwrap();
+                Command::perform(
+                    async move {
+                        matrix::start_event_loop(client, Some(sync_token), command_sender).await
+                    },
+                    |_| ClientMessage::FailedLogin,
+                )
             }
             ClientMessage::FailedLogin => Command::none(),
             ClientMessage::NewMessage(message) => {
