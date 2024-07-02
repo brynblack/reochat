@@ -44,7 +44,7 @@ struct Client {
     compose_value: String,
     messages: Vec<Message>,
     client: Option<matrix_sdk::Client>,
-    sync_token: String,
+    sync_token: Option<String>,
     command_sender: Option<Sender<ClientMessage>>,
     command_receiver: Option<Arc<Mutex<Receiver<ClientMessage>>>>,
     roomid: String,
@@ -54,7 +54,7 @@ struct Client {
 enum ClientMessage {
     ComposerTyped(String),
     MessageSubmitted,
-    LoggedIn(matrix_sdk::Client, String),
+    LoggedIn(matrix_sdk::Client, Option<String>),
     FailedLogin,
     NewMessage(Message),
 }
@@ -187,9 +187,7 @@ impl Application for Client {
                 self.sync_token = sync_token.clone();
                 let command_sender = self.command_sender.clone().unwrap();
                 Command::perform(
-                    async move {
-                        matrix::start_event_loop(client, Some(sync_token), command_sender).await
-                    },
+                    async move { matrix::start_event_loop(client, sync_token, command_sender).await },
                     |_| ClientMessage::FailedLogin,
                 )
             }

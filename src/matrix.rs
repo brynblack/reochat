@@ -41,7 +41,7 @@ pub(crate) struct Credentials {
     pub password: String,
 }
 
-pub async fn run(credentials: Credentials) -> anyhow::Result<(Client, String)> {
+pub async fn run(credentials: Credentials) -> anyhow::Result<(Client, Option<String>)> {
     let data_dir = Path::new("data");
     let session_file = data_dir.join("session");
 
@@ -51,7 +51,7 @@ pub async fn run(credentials: Credentials) -> anyhow::Result<(Client, String)> {
         (login(credentials, &data_dir, &session_file).await?, None)
     };
 
-    Ok((client, sync_token.unwrap()))
+    Ok((client, sync_token))
 }
 
 pub async fn start_event_loop(
