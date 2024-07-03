@@ -260,6 +260,9 @@ async fn on_room_message(
     if room.state() != RoomState::Joined {
         return;
     }
+    if room.client().user_id().unwrap() == event.sender {
+        return;
+    }
     let MessageType::Text(text_content) = &event.content.msgtype else {
         return;
     };

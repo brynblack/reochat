@@ -57,6 +57,7 @@ enum ClientMessage {
     LoggedIn(matrix_sdk::Client, Option<String>),
     FailedLogin,
     NewMessage(Message),
+    None,
 }
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -168,18 +169,23 @@ impl Application for Client {
                         let client_clone = client.clone();
                         let roomid = self.roomid.clone();
                         let content = message.contents.clone();
-                        Command::perform(
-                            async move {
-                                Client::send_message(client_clone, roomid, content)
-                                    .await
-                                    .unwrap();
-                                ClientMessage::NewMessage(message)
-                            },
-                            |_| ClientMessage::FailedLogin,
-                        )
-                    } else {
-                        scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
-                    }
+                        return Command::batch(vec![
+                            scrollable::snap_to(
+                                SCROLLABLE_ID.clone(),
+                                scrollable::RelativeOffset::END,
+                            ),
+                            Command::perform(
+                                async move {
+                                    Client::send_message(client_clone, roomid, content)
+                                        .await
+                                        .unwrap();
+                                },
+                                |_| ClientMessage::None,
+                            ),
+                        ]);
+                    };
+
+                    scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
                 }
             },
             ClientMessage::LoggedIn(client, sync_token) => {
@@ -191,11 +197,12 @@ impl Application for Client {
                     |_| ClientMessage::FailedLogin,
                 )
             }
-            ClientMessage::FailedLogin => Command::none(),
             ClientMessage::NewMessage(message) => {
                 self.messages.push(message);
                 scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
             }
+            ClientMessage::FailedLogin => Command::none(),
+            ClientMessage::None => Command::none(),
         }
     }
 
