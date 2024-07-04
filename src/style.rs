@@ -1,8 +1,46 @@
 use iced::{
     color,
-    widget::{button, text_input},
+    widget::{
+        button,
+        scrollable::{self, Scroller},
+        text_input,
+    },
     Background, Color, Theme,
 };
+
+pub(crate) struct ScrollableRoomList;
+
+impl scrollable::StyleSheet for ScrollableRoomList {
+    type Style = Theme;
+
+    fn active(&self, _style: &Self::Style) -> scrollable::Appearance {
+        scrollable::Appearance {
+            scrollbar: scrollable::Scrollbar {
+                background: iced::Background::Color(Color::TRANSPARENT).into(),
+                border: iced::Border::default(),
+                scroller: Scroller {
+                    color: Color::TRANSPARENT,
+                    border: iced::Border::default(),
+                },
+            },
+            container: iced::widget::container::Appearance {
+                text_color: None,
+                background: None,
+                border: iced::Border::default(),
+                shadow: iced::Shadow::default(),
+            },
+            gap: None,
+        }
+    }
+
+    fn hovered(
+        &self,
+        _style: &Self::Style,
+        _is_mouse_over_scrollbar: bool,
+    ) -> scrollable::Appearance {
+        self.active(&Theme::Dark)
+    }
+}
 
 pub(crate) struct ButtonComposerSend;
 
