@@ -1,4 +1,4 @@
-use iced::advanced::Hasher;
+use iced::{advanced::Hasher, widget::scrollable::Properties};
 use matrix::Credentials;
 use matrix_sdk::ruma::OwnedRoomId;
 use std::{hash::Hash, str::FromStr, sync::Mutex};
@@ -207,7 +207,7 @@ impl Application for Client {
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
-        let messages = Container::new(
+        let timeline = Container::new(
             Scrollable::new(
                 column(self.messages.clone().into_iter().map(|msg| {
                     column![
@@ -268,7 +268,28 @@ impl Application for Client {
         )
         .width(Length::Fill);
 
-        let content = column![messages, composer].spacing(16);
+        let messaging = column![timeline, composer].spacing(16);
+
+        let room_list: Vec<
+            iced::advanced::graphics::core::Element<'_, Self::Message, Self::Theme, iced::Renderer>,
+        > = match &self.client {
+            Some(client) => client
+                .rooms()
+                .into_iter()
+                .map(|room| Text::new(room.name().unwrap_or("loading...".into())).into())
+                .collect(),
+            None => vec![].into(),
+        };
+
+        let rooms = Scrollable::new(column(room_list))
+            .direction(scrollable::Direction::Vertical(
+                Properties::new().width(0).scroller_width(0),
+            ))
+            .style(theme::Scrollable::Custom(Box::new(
+                style::ScrollableRoomList,
+            )));
+
+        let content = row![messaging].spacing(16);
 
         Container::new(content)
             .width(Length::Fill)
@@ -282,7 +303,7 @@ impl Application for Client {
         Theme::Custom(Arc::new(Custom::new(
             "default".to_string(),
             theme::Palette {
-                background: Color::BLACK,
+                background: color!(0x1E1E2E),
                 text: Color::WHITE,
                 primary: color!(0xffc0cb),
                 success: Color::TRANSPARENT,
