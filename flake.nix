@@ -22,6 +22,7 @@
             libxkbcommon
             libGL
             wayland
+            rustup
           ];
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
         };
