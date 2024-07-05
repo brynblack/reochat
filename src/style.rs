@@ -8,6 +8,30 @@ use iced::{
     Background, Color, Theme,
 };
 
+pub(crate) struct ButtonRoomItem;
+
+impl button::StyleSheet for ButtonRoomItem {
+    type Style = Theme;
+
+    fn active(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: Some(Background::Color(color!(0x4c4c4c))),
+            border: iced::Border::with_radius(24.0),
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
+
+    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
+        button::Appearance {
+            background: iced::Background::Color(color!(0x004fee)).into(),
+            border: iced::Border::with_radius(24.0),
+            text_color: Color::WHITE,
+            ..Default::default()
+        }
+    }
+}
+
 pub(crate) struct ScrollableRoomList;
 
 impl scrollable::StyleSheet for ScrollableRoomList {

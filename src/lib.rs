@@ -57,6 +57,7 @@ enum ClientMessage {
     LoggedIn(matrix_sdk::Client, Option<String>),
     FailedLogin,
     NewMessage(Message),
+    RoomChanged(OwnedRoomId),
     None,
 }
 
@@ -201,12 +202,40 @@ impl Application for Client {
                 self.messages.push(message);
                 scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
             }
+            ClientMessage::RoomChanged(roomid) => {
+                self.roomid = roomid.to_string();
+                Command::none()
+            }
             ClientMessage::FailedLogin => Command::none(),
             ClientMessage::None => Command::none(),
         }
     }
 
     fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
+        let infobar = row![Text::new(
+            self.client
+                .clone()
+                .and_then(|client| {
+                    let binding = client.rooms();
+
+                    let clnt = binding
+                        .iter()
+                        .find(|room| room.room_id().to_string() == self.roomid)
+                        .unwrap();
+
+                    let out = clnt.name().unwrap_or_else(|| {
+                        clnt.direct_targets()
+                            .iter()
+                            .map(|id| id.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    });
+
+                    Some(out)
+                })
+                .unwrap_or("".to_string())
+        )];
+
         let timeline = Container::new(
             Scrollable::new(
                 column(self.messages.clone().into_iter().map(|msg| {
@@ -268,7 +297,7 @@ impl Application for Client {
         )
         .width(Length::Fill);
 
-        let messaging = column![timeline, composer].spacing(16);
+        let room = column![infobar, timeline, composer].spacing(16);
 
         let room_list: Vec<
             iced::advanced::graphics::core::Element<'_, Self::Message, Self::Theme, iced::Renderer>,
@@ -276,12 +305,23 @@ impl Application for Client {
             Some(client) => client
                 .rooms()
                 .into_iter()
-                .map(|room| Text::new(room.name().unwrap_or("loading...".into())).into())
+                .map(|room| {
+                    Button::new(Text::new(room.name().unwrap_or_else(|| {
+                        room.direct_targets()
+                            .iter()
+                            .map(|id| id.to_string())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    })))
+                    .style(theme::Button::Custom(Box::new(style::ButtonRoomItem)))
+                    .on_press(ClientMessage::RoomChanged(room.room_id().into()))
+                    .into()
+                })
                 .collect(),
             None => vec![].into(),
         };
 
-        let rooms = Scrollable::new(column(room_list))
+        let rooms = Scrollable::new(column(room_list).spacing(16))
             .direction(scrollable::Direction::Vertical(
                 Properties::new().width(0).scroller_width(0),
             ))
@@ -289,7 +329,7 @@ impl Application for Client {
                 style::ScrollableRoomList,
             )));
 
-        let content = row![messaging].spacing(16);
+        let content = row![rooms, room].spacing(16);
 
         Container::new(content)
             .width(Length::Fill)
