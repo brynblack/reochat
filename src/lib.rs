@@ -28,7 +28,6 @@ use std::{
 struct Flags {
     username: String,
     password: String,
-    roomid: String,
 }
 
 #[derive(Clone, Debug)]
@@ -70,8 +69,6 @@ struct Cli {
     username: String,
     /// Account password
     password: String,
-    /// Room ID to message in (WIP)
-    roomid: String,
 }
 
 pub async fn run() -> anyhow::Result<()> {
@@ -82,7 +79,6 @@ pub async fn run() -> anyhow::Result<()> {
         flags: Flags {
             username: cli.username,
             password: cli.password,
-            roomid: cli.roomid,
         },
         ..Default::default()
     })
@@ -119,7 +115,6 @@ impl Application for Client {
             username: flags.username.clone(),
             command_sender: Some(command_sender.clone()),
             command_receiver: Some(Arc::new(Mutex::new(command_receiver))),
-            roomid: flags.roomid,
             ..Default::default()
         };
 
@@ -220,11 +215,15 @@ impl Application for Client {
 
                     let clnt = binding
                         .iter()
-                        .find(|room| room.room_id().to_string() == self.roomid)
-                        .unwrap();
+                        .find(|room| room.room_id().to_string() == self.roomid);
 
-                    let out = clnt.name().unwrap_or_else(|| {
-                        clnt.direct_targets()
+                    if clnt.is_none() {
+                        return None;
+                    }
+
+                    let out = clnt.unwrap().name().unwrap_or_else(|| {
+                        clnt.unwrap()
+                            .direct_targets()
                             .iter()
                             .map(|id| id.to_string())
                             .collect::<Vec<String>>()
