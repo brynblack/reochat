@@ -1,20 +1,18 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::mpsc::Sender,
-};
+use std::path::{Path, PathBuf};
+use tokio::sync::mpsc::UnboundedSender;
 
 use chrono::Local;
 use log::info;
 use matrix_sdk::{
+    Client, Error, LoopCtrl, Room, RoomState,
+    authentication::matrix::MatrixSession,
     config::SyncSettings,
-    matrix_auth::MatrixSession,
     ruma::{
         api::client::filter::FilterDefinition,
         events::room::message::{MessageType, OriginalSyncRoomMessageEvent},
     },
-    Client, Error, LoopCtrl, Room, RoomState,
 };
-use rand::{distributions::Alphanumeric, rngs::StdRng, Rng, SeedableRng};
+use rand::{RngExt, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -48,7 +46,7 @@ pub async fn run(credentials: Credentials) -> anyhow::Result<(Client, Option<Str
     let (client, sync_token) = if session_file.exists() {
         restore_session(&session_file).await?
     } else {
-        (login(credentials, &data_dir, &session_file).await?, None)
+        (login(credentials, data_dir, &session_file).await?, None)
     };
 
     Ok((client, sync_token))
@@ -57,14 +55,12 @@ pub async fn run(credentials: Credentials) -> anyhow::Result<(Client, Option<Str
 pub async fn start_event_loop(
     client: Client,
     sync_token: Option<String>,
-    sender: Sender<ClientMessage>,
+    sender: UnboundedSender<ClientMessage>,
 ) -> anyhow::Result<()> {
     let data_dir = Path::new("data");
     let session_file = data_dir.join("session");
 
-    sync(client, sync_token, &session_file, sender)
-        .await
-        .map_err(Into::into)
+    sync(client, sync_token, &session_file, sender).await
 }
 
 async fn restore_session(session_file: &Path) -> anyhow::Result<(Client, Option<String>)> {
@@ -109,7 +105,7 @@ async fn login(
         .await
     {
         Ok(_) => {
-            info!("Logged in as {}", &credentials.username);
+            info!("Logged in as {}", credentials.username);
         }
         Err(error) => {
             info!("Error logging in: {}", error);
@@ -135,20 +131,20 @@ async fn build_client(
     credentials: &Credentials,
     data_dir: &Path,
 ) -> anyhow::Result<(Client, ClientSession)> {
-    let mut rng = StdRng::from_entropy();
-
-    let db_subfolder: String = (&mut rng)
-        .sample_iter(Alphanumeric)
-        .take(7)
-        .map(char::from)
-        .collect();
-    let db_path = data_dir.join(db_subfolder);
-
-    let passphrase: String = (&mut rng)
-        .sample_iter(Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect();
+    let (db_path, passphrase) = {
+        let mut rng = rand::rng();
+        let db_subfolder: String = (&mut rng)
+            .sample_iter(Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+        let passphrase: String = (&mut rng)
+            .sample_iter(Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect();
+        (data_dir.join(db_subfolder), passphrase)
+    };
 
     let homeserver = format!(
         "https://{}",
@@ -170,7 +166,7 @@ async fn build_client(
                         db_path,
                         passphrase,
                     },
-                ))
+                ));
             }
             Err(error) => match &error {
                 matrix_sdk::ClientBuildError::AutoDiscovery(_)
@@ -191,7 +187,7 @@ async fn sync(
     client: Client,
     initial_sync_token: Option<String>,
     session_file: &Path,
-    sender: Sender<ClientMessage>,
+    sender: UnboundedSender<ClientMessage>,
 ) -> anyhow::Result<()> {
     println!("Launching a first sync to ignore past messages…");
 
@@ -255,7 +251,7 @@ async fn persist_sync_token(session_file: &Path, sync_token: String) -> anyhow::
 async fn on_room_message(
     event: OriginalSyncRoomMessageEvent,
     room: Room,
-    sender: Sender<ClientMessage>,
+    sender: UnboundedSender<ClientMessage>,
 ) {
     if room.state() != RoomState::Joined {
         return;

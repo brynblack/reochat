@@ -1,133 +1,81 @@
 use iced::{
-    color,
+    Background, Border, Color, Shadow, Theme, color,
     widget::{
-        button,
+        button, container,
         scrollable::{self, Scroller},
         text_input,
     },
-    Background, Color, Theme,
 };
 
-pub(crate) struct ButtonRoomItem;
-
-impl button::StyleSheet for ButtonRoomItem {
-    type Style = Theme;
-
-    fn active(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: Some(Background::Color(color!(0x4c4c4c))),
-            border: iced::Border::with_radius(24.0),
-            text_color: Color::WHITE,
-            ..Default::default()
-        }
-    }
-
-    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: iced::Background::Color(color!(0x004fee)).into(),
-            border: iced::Border::with_radius(24.0),
-            text_color: Color::WHITE,
-            ..Default::default()
-        }
+fn rounded(radius: f32) -> Border {
+    Border {
+        radius: radius.into(),
+        ..Border::default()
     }
 }
 
-pub(crate) struct ScrollableRoomList;
-
-impl scrollable::StyleSheet for ScrollableRoomList {
-    type Style = Theme;
-
-    fn active(&self, _style: &Self::Style) -> scrollable::Appearance {
-        scrollable::Appearance {
-            scrollbar: scrollable::Scrollbar {
-                background: iced::Background::Color(Color::TRANSPARENT).into(),
-                border: iced::Border::default(),
-                scroller: Scroller {
-                    color: Color::TRANSPARENT,
-                    border: iced::Border::default(),
-                },
-            },
-            container: iced::widget::container::Appearance {
-                text_color: None,
-                background: None,
-                border: iced::Border::default(),
-                shadow: iced::Shadow::default(),
-            },
-            gap: None,
-        }
-    }
-
-    fn hovered(
-        &self,
-        _style: &Self::Style,
-        _is_mouse_over_scrollbar: bool,
-    ) -> scrollable::Appearance {
-        self.active(&Theme::Dark)
+pub(crate) fn button_room_item(_theme: &Theme, status: button::Status) -> button::Style {
+    let background = match status {
+        button::Status::Hovered => color!(0x004fee),
+        _ => color!(0x4c4c4c),
+    };
+    button::Style {
+        background: Some(Background::Color(background)),
+        border: rounded(24.0),
+        text_color: Color::WHITE,
+        ..Default::default()
     }
 }
 
-pub(crate) struct ButtonComposerSend;
-
-impl button::StyleSheet for ButtonComposerSend {
-    type Style = Theme;
-
-    fn active(&self, style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: iced::Background::Color(style.palette().primary).into(),
-            border: iced::Border::with_radius(24.0),
-            ..Default::default()
-        }
-    }
-
-    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
-        button::Appearance {
-            background: iced::Background::Color(color!(0x004fee)).into(),
-            border: iced::Border::with_radius(24.0),
-            ..Default::default()
-        }
+pub(crate) fn button_composer_send(theme: &Theme, status: button::Status) -> button::Style {
+    let background = match status {
+        button::Status::Hovered => color!(0x004fee),
+        _ => theme.palette().primary,
+    };
+    button::Style {
+        background: Some(Background::Color(background)),
+        border: rounded(24.0),
+        ..Default::default()
     }
 }
 
-pub(crate) struct TextInputComposer;
-
-impl text_input::StyleSheet for TextInputComposer {
-    type Style = Theme;
-
-    fn active(&self, _style: &Self::Style) -> text_input::Appearance {
-        text_input::Appearance {
-            background: Background::Color(color!(0x4c4c4c)),
-            border: iced::Border::with_radius(24.0),
-            icon_color: Color::TRANSPARENT,
-        }
+pub(crate) fn text_input_composer(_theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let value = match status {
+        text_input::Status::Disabled => color!(0x969696),
+        _ => color!(0xffffff),
+    };
+    text_input::Style {
+        background: Background::Color(color!(0x4c4c4c)),
+        border: rounded(24.0),
+        icon: Color::TRANSPARENT,
+        placeholder: color!(0x969696),
+        value,
+        selection: color!(0x0000ff),
     }
+}
 
-    fn focused(&self, _style: &Self::Style) -> text_input::Appearance {
-        text_input::Appearance {
-            ..self.active(&Theme::Dark)
-        }
-    }
-
-    fn placeholder_color(&self, _style: &Self::Style) -> iced::Color {
-        color!(0x969696)
-    }
-
-    fn value_color(&self, _style: &Self::Style) -> iced::Color {
-        color!(0xffffff)
-    }
-
-    fn selection_color(&self, _style: &Self::Style) -> iced::Color {
-        color!(0x0000ff)
-    }
-
-    fn disabled_color(&self, _style: &Self::Style) -> Color {
-        color!(0x969696)
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> text_input::Appearance {
-        text_input::Appearance {
-            background: Background::Color(color!(0x4c4c4c)),
-            border: iced::Border::with_radius(24.0),
-            icon_color: Color::TRANSPARENT,
-        }
+pub(crate) fn scrollable_room_list(
+    _theme: &Theme,
+    _status: scrollable::Status,
+) -> scrollable::Style {
+    let transparent_rail = || scrollable::Rail {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        border: Border::default(),
+        scroller: Scroller {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+        },
+    };
+    scrollable::Style {
+        container: container::Style::default(),
+        vertical_rail: transparent_rail(),
+        horizontal_rail: transparent_rail(),
+        gap: None,
+        auto_scroll: scrollable::AutoScroll {
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border::default(),
+            shadow: Shadow::default(),
+            icon: Color::TRANSPARENT,
+        },
     }
 }

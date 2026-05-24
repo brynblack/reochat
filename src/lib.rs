@@ -1,34 +1,29 @@
-use iced::{advanced::Hasher, widget::scrollable::Properties};
 use matrix::Credentials;
 use matrix_sdk::ruma::OwnedRoomId;
-use std::{hash::Hash, str::FromStr, sync::Mutex};
+use std::{
+    str::FromStr,
+    sync::{LazyLock, OnceLock},
+};
+use tokio::sync::{
+    Mutex,
+    mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+};
 mod matrix;
 mod style;
 
 use chrono::{DateTime, Local};
 use clap::Parser;
 use iced::{
+    Color, Length, Padding, Task, Theme,
     alignment::Vertical,
-    color, executor,
+    color,
     theme::{self, Custom},
-    widget::{column, row, scrollable, svg, Button, Container, Scrollable, Text, TextInput},
-    Application, Color, Command, Length, Padding, Theme,
-};
-use log::{info, warn};
-use once_cell::sync::Lazy;
-use std::{
-    env,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc,
+    widget::{
+        Button, Container, Id, Scrollable, Text, TextInput, column, operation, row, scrollable, svg,
     },
 };
-
-#[derive(Default)]
-struct Flags {
-    username: String,
-    password: String,
-}
+use log::{info, warn};
+use std::{env, sync::Arc};
 
 #[derive(Clone, Debug)]
 struct Message {
@@ -37,17 +32,25 @@ struct Message {
     timestamp: DateTime<Local>,
 }
 
-#[derive(Default)]
 struct Client {
     username: String,
     compose_value: String,
     messages: Vec<Message>,
     client: Option<matrix_sdk::Client>,
     sync_token: Option<String>,
-    command_sender: Option<Sender<ClientMessage>>,
-    command_receiver: Option<Arc<Mutex<Receiver<ClientMessage>>>>,
+    command_sender: Option<UnboundedSender<ClientMessage>>,
     roomid: String,
 }
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        if let Some(client) = self.client.take() {
+            std::mem::forget(client);
+        }
+    }
+}
+
+static MATRIX_RECEIVER: OnceLock<Arc<Mutex<UnboundedReceiver<ClientMessage>>>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 enum ClientMessage {
@@ -60,29 +63,27 @@ enum ClientMessage {
     None,
 }
 
-static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
+static SCROLLABLE_ID: LazyLock<Id> = LazyLock::new(Id::unique);
 
 #[derive(Parser)]
 #[command(version, about)]
 struct Cli {
     /// Account username (e.g. `@meow123:matrix.org`)
+    #[arg(env = "REOCHAT_USERNAME")]
     username: String,
     /// Account password
+    #[arg(env = "REOCHAT_PASSWORD", hide_env_values = true)]
     password: String,
 }
 
-pub async fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
-    Client::run(iced::Settings {
-        antialiasing: true,
-        flags: Flags {
-            username: cli.username,
-            password: cli.password,
-        },
-        ..Default::default()
-    })
-    .map_err(anyhow::Error::from)
+pub fn run() -> anyhow::Result<()> {
+    iced::application(Client::new, Client::update, Client::view)
+        .title(Client::title)
+        .theme(Client::theme)
+        .subscription(Client::subscription)
+        .antialiasing(true)
+        .run()
+        .map_err(anyhow::Error::from)
 }
 
 impl Client {
@@ -100,32 +101,32 @@ impl Client {
             .await?;
         Ok(())
     }
-}
 
-impl Application for Client {
-    type Executor = executor::Default;
-    type Message = ClientMessage;
-    type Theme = Theme;
-    type Flags = Flags;
+    fn new() -> (Self, Task<ClientMessage>) {
+        let cli = Cli::parse();
 
-    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let (command_sender, command_receiver) = std::sync::mpsc::channel();
+        let (command_sender, command_receiver) = unbounded_channel();
+
+        let _ = MATRIX_RECEIVER.set(Arc::new(Mutex::new(command_receiver)));
 
         let client = Self {
-            username: flags.username.clone(),
+            username: cli.username.clone(),
+            compose_value: String::new(),
+            messages: Vec::new(),
+            client: None,
+            sync_token: None,
             command_sender: Some(command_sender.clone()),
-            command_receiver: Some(Arc::new(Mutex::new(command_receiver))),
-            ..Default::default()
+            roomid: String::new(),
         };
 
         let credentials = Credentials {
-            username: flags.username,
-            password: flags.password,
+            username: cli.username,
+            password: cli.password,
         };
 
         (
             client,
-            Command::perform(matrix::run(credentials), |res| {
+            Task::perform(matrix::run(credentials), |res| {
                 let (client, token) = match res {
                     Ok((client, token)) => (client, token),
                     Err(err) => {
@@ -143,14 +144,14 @@ impl Application for Client {
         env!("CARGO_PKG_NAME").into()
     }
 
-    fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
+    fn update(&mut self, message: ClientMessage) -> Task<ClientMessage> {
         match message {
             ClientMessage::ComposerTyped(s) => {
                 self.compose_value = s;
-                Command::none()
+                Task::none()
             }
             ClientMessage::MessageSubmitted => match self.compose_value.as_str() {
-                "" => Command::none(),
+                "" => Task::none(),
                 _ => {
                     let message = Message {
                         sender: self.username.clone(),
@@ -165,12 +166,12 @@ impl Application for Client {
                         let client_clone = client.clone();
                         let roomid = self.roomid.clone();
                         let content = message.contents.clone();
-                        return Command::batch(vec![
-                            scrollable::snap_to(
+                        return Task::batch(vec![
+                            operation::snap_to(
                                 SCROLLABLE_ID.clone(),
                                 scrollable::RelativeOffset::END,
                             ),
-                            Command::perform(
+                            Task::perform(
                                 async move {
                                     Client::send_message(client_clone, roomid, content)
                                         .await
@@ -181,49 +182,43 @@ impl Application for Client {
                         ]);
                     };
 
-                    scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
+                    operation::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
                 }
             },
             ClientMessage::LoggedIn(client, sync_token) => {
                 self.client = Some(client.clone());
                 self.sync_token = sync_token.clone();
                 let command_sender = self.command_sender.clone().unwrap();
-                Command::perform(
+                Task::perform(
                     async move { matrix::start_event_loop(client, sync_token, command_sender).await },
                     |_| ClientMessage::FailedLogin,
                 )
             }
             ClientMessage::NewMessage(message) => {
                 self.messages.push(message);
-                scrollable::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
+                operation::snap_to(SCROLLABLE_ID.clone(), scrollable::RelativeOffset::END)
             }
             ClientMessage::RoomChanged(roomid) => {
                 self.roomid = roomid.to_string();
-                Command::none()
+                Task::none()
             }
-            ClientMessage::FailedLogin => Command::none(),
-            ClientMessage::None => Command::none(),
+            ClientMessage::FailedLogin => Task::none(),
+            ClientMessage::None => Task::none(),
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, Self::Theme, iced::Renderer> {
+    fn view(&self) -> iced::Element<'_, ClientMessage, Theme, iced::Renderer> {
         let infobar = row![Text::new(
             self.client
                 .clone()
                 .and_then(|client| {
                     let binding = client.rooms();
-
-                    let clnt = binding
+                    let room = binding
                         .iter()
-                        .find(|room| room.room_id().to_string() == self.roomid);
+                        .find(|room| room.room_id().as_str() == self.roomid)?;
 
-                    if clnt.is_none() {
-                        return None;
-                    }
-
-                    let out = clnt.unwrap().name().unwrap_or_else(|| {
-                        clnt.unwrap()
-                            .direct_targets()
+                    let out = room.name().unwrap_or_else(|| {
+                        room.direct_targets()
                             .iter()
                             .map(|id| id.to_string())
                             .collect::<Vec<String>>()
@@ -232,7 +227,7 @@ impl Application for Client {
 
                     Some(out)
                 })
-                .unwrap_or("".to_string())
+                .unwrap_or_default()
         )];
 
         let timeline = Container::new(
@@ -243,14 +238,19 @@ impl Application for Client {
                             Text::new(msg.sender),
                             Text::new(format!("{}", msg.timestamp.format("%H:%M"))).size(12)
                         ]
-                        .align_items(iced::Alignment::Center)
+                        .align_y(iced::Alignment::Center)
                         .spacing(8),
                         Text::new(msg.contents)
                     ]
                     .into()
                 }))
                 .spacing(8)
-                .padding(Padding::from([0, 20, 0, 0]))
+                .padding(Padding {
+                    top: 0.0,
+                    right: 20.0,
+                    bottom: 0.0,
+                    left: 0.0,
+                })
                 .width(Length::Fill),
             )
             .id(SCROLLABLE_ID.clone()),
@@ -263,7 +263,7 @@ impl Application for Client {
             row![
                 TextInput::new("Message", &self.compose_value)
                     .on_input(ClientMessage::ComposerTyped)
-                    .style(theme::TextInput::Custom(Box::new(style::TextInputComposer)))
+                    .style(style::text_input_composer)
                     .on_submit(ClientMessage::MessageSubmitted)
                     .padding(Padding {
                         top: 12.0,
@@ -278,9 +278,9 @@ impl Application for Client {
                     ))
                     .width(20)
                     .height(20)
-                    .style(theme::Svg::custom_fn(|_theme| svg::Appearance {
+                    .style(|_theme, _status| svg::Style {
                         color: Some(color!(0xffffff)),
-                    })),
+                    }),
                 )
                 .padding(Padding {
                     top: 12.0,
@@ -289,9 +289,9 @@ impl Application for Client {
                     left: 14.0,
                 })
                 .on_press(ClientMessage::MessageSubmitted)
-                .style(theme::Button::Custom(Box::new(style::ButtonComposerSend))),
+                .style(style::button_composer_send),
             ]
-            .align_items(iced::Alignment::Center)
+            .align_y(iced::Alignment::Center)
             .spacing(8),
         )
         .width(Length::Fill);
@@ -299,7 +299,7 @@ impl Application for Client {
         let room = column![infobar, timeline, composer].spacing(16);
 
         let room_list: Vec<
-            iced::advanced::graphics::core::Element<'_, Self::Message, Self::Theme, iced::Renderer>,
+            iced::advanced::graphics::core::Element<'_, ClientMessage, Theme, iced::Renderer>,
         > = match &self.client {
             Some(client) => client
                 .rooms()
@@ -312,21 +312,19 @@ impl Application for Client {
                             .collect::<Vec<String>>()
                             .join(", ")
                     })))
-                    .style(theme::Button::Custom(Box::new(style::ButtonRoomItem)))
+                    .style(style::button_room_item)
                     .on_press(ClientMessage::RoomChanged(room.room_id().into()))
                     .into()
                 })
                 .collect(),
-            None => vec![].into(),
+            None => vec![],
         };
 
         let rooms = Scrollable::new(column(room_list).spacing(16))
             .direction(scrollable::Direction::Vertical(
-                Properties::new().width(0).scroller_width(0),
+                scrollable::Scrollbar::new().width(0).scroller_width(0),
             ))
-            .style(theme::Scrollable::Custom(Box::new(
-                style::ScrollableRoomList,
-            )));
+            .style(style::scrollable_room_list);
 
         let content = row![rooms, room].spacing(16);
 
@@ -338,7 +336,7 @@ impl Application for Client {
             .into()
     }
 
-    fn theme(&self) -> Self::Theme {
+    fn theme(&self) -> Theme {
         Theme::Custom(Arc::new(Custom::new(
             "default".to_string(),
             theme::Palette {
@@ -347,49 +345,28 @@ impl Application for Client {
                 primary: color!(0xffc0cb),
                 success: Color::TRANSPARENT,
                 danger: Color::TRANSPARENT,
+                warning: color!(0xff0000),
             },
         )))
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::Message> {
-        if let Some(receiver) = &self.command_receiver {
-            iced::Subscription::from_recipe(PollMessages {
-                receiver: Arc::clone(receiver),
-            })
+    fn subscription(&self) -> iced::Subscription<ClientMessage> {
+        if MATRIX_RECEIVER.get().is_some() {
+            iced::Subscription::run(matrix_event_stream)
         } else {
             iced::Subscription::none()
         }
     }
 }
 
-struct PollMessages {
-    receiver: Arc<Mutex<Receiver<ClientMessage>>>,
-}
+fn matrix_event_stream() -> impl iced::futures::Stream<Item = ClientMessage> {
+    let receiver = MATRIX_RECEIVER
+        .get()
+        .expect("matrix receiver not initialized")
+        .clone();
 
-impl iced::advanced::subscription::Recipe for PollMessages {
-    type Output = ClientMessage;
-
-    fn hash(&self, state: &mut Hasher) {
-        std::any::TypeId::of::<Self>().hash(state);
-    }
-
-    fn stream(
-        self: Box<Self>,
-        _input: iced::advanced::subscription::EventStream,
-    ) -> iced::advanced::graphics::futures::BoxStream<Self::Output> {
-        use iced::futures::StreamExt;
-
-        let receiver = self.receiver.clone();
-
-        let stream = iced::futures::stream::unfold(receiver, |receiver| async move {
-            let message = {
-                let receiver = receiver.lock().unwrap();
-                receiver.recv().ok()
-            };
-
-            message.map(|msg| (msg, receiver))
-        });
-
-        stream.boxed()
-    }
+    iced::futures::stream::unfold(receiver, |receiver| async move {
+        let message = receiver.lock().await.recv().await;
+        message.map(|msg| (msg, receiver))
+    })
 }

@@ -1,3 +1,5 @@
-/target
-data
+.direnv
 .env
+data
+result
+target

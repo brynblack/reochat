@@ -2,20 +2,17 @@
 A blazingly fast modern Matrix client written in Rust.
 
 ## Contents
-* [Installation](#installation)
+* [Development](#development)
 * [License](#license)
 
-## Installation
-Building/running the package:
+## Development
 
 ```sh
-cargo build
-cargo run
+nix develop
 ```
 
-Installing to system:
 ```sh
-cargo install
+cargo run
 ```
 
 ## License
